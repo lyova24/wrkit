@@ -3,35 +3,60 @@
     <p>
       small, fast task runner driven by YAML files
     </p>
-</div>
 
+---
 
-### how to
-#### build
+#### how to
+##### build
+
+<div align="left">
+
 ```shell
 go mod tidy && go run . build-all
 ```
 
-#### install wrkit
+</div>
+
+##### install wrkit
+
+<div align="left">
+
 ```shell
 # replace BUILD_NAME with binary for your platform in ./builds
 sudo install -m 755 ./builds/BUILD_NAME /usr/local/bin/wrkit
 ```
 
-#### install on-tab completion
+</div>
+
+##### install on-tab completion
+
+<div align="left">
+
 ```shell
 # run in ~/
 wrkit completion bash > ~/.wrkit-completion.sh && echo 'source ~/.wrkit-completion.sh' >> ~/.bashrc
 # if using not bash, replace it with fish, powershell or zsh in first part of command
 ```
 
-#### initialize in directory
+</div>
+
+----
+
+##### initialize in directory
+
+<div align="left">
+
 ```shell
 # this will create wrkit.yaml file for configuration
 wrkit -m init
 ```
 
-#### run tasks from anywhere
+</div>
+
+##### run tasks from anywhere
+
+<div align="left">
+
 ```shell
 # add .wrkit.master.yaml in ~/
 touch .wrkit.master.yaml
@@ -41,8 +66,51 @@ wrkit some-task-name --no-master
 # also notice that local wrkit.yaml is more prioritized than .wrkit.master.yaml on conflicts
 ```
 
-### learn more
-#### read --help for more usage information
+</div>
+
+----
+
+#### learn more
+##### wrkit.yaml example
+
+<div align="left">
+
+```yaml
+vars: # variables to use
+  SLEEP_ALL_SUCCESS_MSG: "all sleep tasks executed successfully!" # can be replaced by --var
+
+tasks:
+  sleep-for-2:
+    desc: "sleep for 2 seconds" # description
+    cmds: |
+      sleep 2
+      echo "i slept for 2 seconds!"
+    parallel: true # is allowed to run parallel
+
+  sleep-for-3:
+    desc: "sleep for 3 seconds"
+    cmds: | # commands to run
+      sleep 3
+      echo "i slept for 3 seconds!"
+    parallel: true
+
+  sleep-all:
+    desc: "run all sleep tasks"
+    cmds: |
+      echo sleep on the most top level for 2 seconds
+      sleep 2
+      echo {{.SLEEP_ALL_SUCCESS_MSG}}
+    deps: # dependencies list (runs in chaotic order)
+      - sleep-for-2
+      - sleep-for-3
+ ```
+
+</div>
+
+##### read --help for more usage information
+
+<div align="left">
+
 ```shell
 lyova24@laptop:~$ wrkit --help
 wrkit — a small, fast task runner driven by YAML files.
@@ -72,3 +140,6 @@ Flags:
   -V, --var stringArray   Variables to pass to templates (key=value). Can be repeated.
   -v, --verbose           Verbose output
 ```
+
+</div>
+</div>

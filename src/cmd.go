@@ -16,15 +16,59 @@ var (
 	varsSlice   []string
 	version     = "0.1.0"
 	noMaster    bool
+	modeFlag    bool
 )
 
 func Execute() {
-	root := &cobra.Command{
-		Use:   "wrkit",
-		Short: "wrkit — YAML-powered tiny make-like runner",
-		Long:  "wrkit — a small, fast task runner driven by YAML files.",
+	// Предварительно проверяем os.Args — нужен ли режим с подкомандами (--mode / -m).
+	// Это нужно, чтобы зарегистрировать подкоманды только когда пользователь явно указал --mode.
+	modeFlag = false
+	for _, a := range os.Args[1:] {
+		if a == "-m" || a == "--mode" || strings.HasPrefix(a, "-m=") || strings.HasPrefix(a, "--mode=") {
+			modeFlag = true
+			break
+		}
 	}
 
+	root := &cobra.Command{
+		Use:   "wrkit [flags] [task-name]",
+		Short: "wrkit — YAML-powered tiny make-like runner",
+		Long: `wrkit — a small, fast task runner driven by YAML files.
+
+Behavior:
+  * If --mode (or -m) is provided, wrkit expects a subcommand (run, list, show, init, version).
+    Examples:
+      wrkit --mode run task-name
+      wrkit -m init
+
+  * If --mode is NOT provided, wrkit treats the first positional argument as a task name
+    and runs that task directly:
+      wrkit task-name
+    This provides a convenient default "run" behavior without typing "run".`,
+		// Если --mode не указан — корневая команда должна вести себя как `run`,
+		// т.е. принимать имя задачи как первый аргумент и выполнять её.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if modeFlag {
+				// В режиме с подкомандами корневая команда сама по себе не выполняет действий —
+				// поведение задают подкоманды; покажем help, если ничего не вызвано.
+				return cmd.Help()
+			}
+
+			// Если --mode не указан, ожидаем хотя бы один аргумент — имя задачи.
+			if len(args) < 1 {
+				return cmd.Help()
+			}
+			taskName := args[0]
+			cfg, err := LoadCombinedConfig(cfgFile, noMaster)
+			if err != nil {
+				return err
+			}
+			varsMap := parseVars(varsSlice)
+			return RunTaskByName(cfg, taskName, concurrency, dryRun, verbose, varsMap)
+		},
+	}
+
+	// Общие persistent-флаги (будут доступны и в режиме с подкомандами, и в обычном режиме).
 	root.PersistentFlags().StringVarP(&cfgFile, "file", "f", "wrkit.yaml", "wrkit YAML configuration file")
 	root.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 4, "Number of tasks to run concurrently")
 	root.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Print what would be done without executing")
@@ -32,11 +76,19 @@ func Execute() {
 	root.PersistentFlags().StringArrayVarP(&varsSlice, "var", "V", []string{}, "Variables to pass to templates (key=value). Can be repeated.")
 	root.PersistentFlags().BoolVar(&noMaster, "no-master", false, "Ignore global ~/.wrkit.master.yaml and use only local wrkit.yaml")
 
-	root.AddCommand(cmdRun())
-	root.AddCommand(cmdList())
-	root.AddCommand(cmdShow())
-	root.AddCommand(cmdInit())
-	root.AddCommand(cmdVersion())
+	// Регистрируем флаг --mode / -m (cobra распознает его); значение по умолчанию — результат предварительной проверки os.Args.
+	root.PersistentFlags().BoolVarP(&modeFlag, "mode", "m", modeFlag,
+		"Enable subcommand mode. When set, use subcommands (run, list, show, init, version).\n"+
+			"When omitted, the first positional argument is treated as a task name (wrkit <task-name>).")
+
+	// Регистрируем подкоманды только если включён режим --mode
+	if modeFlag {
+		root.AddCommand(cmdRun())
+		root.AddCommand(cmdList())
+		root.AddCommand(cmdShow())
+		root.AddCommand(cmdInit())
+		root.AddCommand(cmdVersion())
+	}
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

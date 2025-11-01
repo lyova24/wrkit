@@ -1,0 +1,112 @@
+package src
+
+import (
+	"errors"
+	"fmt"
+)
+
+type TaskNode struct {
+	Name string
+	Cfg  *TaskConfig
+}
+
+type TaskGraph struct {
+	Nodes map[string]*TaskNode
+	// adjacency: node -> deps
+	Deps map[string][]string
+}
+
+func BuildGraph(cfg *Config) (*TaskGraph, error) {
+	g := &TaskGraph{
+		Nodes: map[string]*TaskNode{},
+		Deps:  map[string][]string{},
+	}
+	for name, tcfg := range cfg.Tasks {
+		g.Nodes[name] = &TaskNode{
+			Name: name,
+			Cfg:  tcfg,
+		}
+		if tcfg.Deps == nil {
+			g.Deps[name] = []string{}
+		} else {
+			g.Deps[name] = append([]string(nil), tcfg.Deps...)
+		}
+	}
+	// Validate deps presence
+	for name, deps := range g.Deps {
+		for _, d := range deps {
+			if _, ok := g.Nodes[d]; !ok {
+				return nil, fmt.Errorf("task %q depends on unknown task %q", name, d)
+			}
+		}
+	}
+	// Check cycles
+	if err := checkCycles(g); err != nil {
+		return nil, err
+	}
+	return g, nil
+}
+
+func checkCycles(g *TaskGraph) error {
+	// DFS coloring
+	const (
+		white = 0
+		gray  = 1
+		black = 2
+	)
+	color := make(map[string]int)
+	var stack []string
+	var visit func(string) error
+	visit = func(u string) error {
+		color[u] = gray
+		stack = append(stack, u)
+		for _, v := range g.Deps[u] {
+			if color[v] == 0 {
+				if err := visit(v); err != nil {
+					return err
+				}
+			} else if color[v] == gray {
+				// found cycle
+				// build cycle description
+				cycle := append([]string{}, stack...)
+				cycle = append(cycle, v)
+				return errors.New("cycle detected: " + fmt.Sprint(cycle))
+			}
+		}
+		color[u] = black
+		stack = stack[:len(stack)-1]
+		return nil
+	}
+	for name := range g.Nodes {
+		if color[name] == 0 {
+			if err := visit(name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// CollectSubgraph returns all tasks needed for the named root (including root).
+func (g *TaskGraph) CollectSubgraph(root string) ([]string, error) {
+	if _, ok := g.Nodes[root]; !ok {
+		return nil, fmt.Errorf("task %q not found", root)
+	}
+	// DFS to collect
+	visited := map[string]bool{}
+	var order []string
+	var dfs func(string)
+	dfs = func(u string) {
+		if visited[u] {
+			return
+		}
+		visited[u] = true
+		for _, d := range g.Deps[u] {
+			dfs(d)
+		}
+		order = append(order, u)
+	}
+	dfs(root)
+	// order is post-order: dependencies first, root last
+	return order, nil
+}

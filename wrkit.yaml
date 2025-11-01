@@ -7,14 +7,19 @@ tasks:
     cmds:
       - echo "done!"
     deps:
+      - make-builds-dir
       - build-linux-amd64
       - build-macos-amd64
       - build-macos-arm64
 
+  make-builds-dir:
+    desc: "make directory for builds"
+    cmds: |
+      mkdir -p {{.BUILD_DIR}}
+
   build-linux-amd64:
     desc: "build binary for linux amd64"
     cmds:
-      - mkdir -p {{.BUILD_DIR}}
       - GOOS=linux GOARCH=amd64 go build -o {{.BUILD_DIR}}/wrkit.linux.amd64
       - echo "success build for linux amd64!"
     parallel: true
@@ -22,7 +27,6 @@ tasks:
   build-macos-amd64:
     desc: "build binary for macos amd64"
     cmds:
-      - mkdir -p {{.BUILD_DIR}}
       - GOOS=darwin GOARCH=amd64 go build -o {{.BUILD_DIR}}/wrkit.macos.amd64
       - echo "success build for macos amd64!"
     parallel: true
@@ -30,7 +34,6 @@ tasks:
   build-macos-arm64:
     desc: "build binary for macos arm64"
     cmds:
-      - mkdir -p {{.BUILD_DIR}}
       - GOOS=darwin GOARCH=arm64 go build -o {{.BUILD_DIR}}/wrkit.macos.arm64
       - echo "success build for macos arm64!"
     parallel: true

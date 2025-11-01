@@ -64,7 +64,7 @@ Behavior:
 				return err
 			}
 			varsMap := parseVars(varsSlice)
-			return RunTaskByName(cfg, taskName, concurrency, dryRun, verbose, varsMap)
+			return RunTaskByName(cfg, taskName, dryRun, verbose, varsMap)
 		},
 	}
 
@@ -118,7 +118,7 @@ func cmdRun() *cobra.Command {
 				return err
 			}
 			varsMap := parseVars(varsSlice)
-			return RunTaskByName(cfg, taskName, concurrency, dryRun, verbose, varsMap)
+			return RunTaskByName(cfg, taskName, dryRun, verbose, varsMap)
 		},
 	}
 	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

@@ -2,208 +2,110 @@ package src
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"sync"
-	"time"
 )
 
-type execResult struct {
-	name string
-	err  error
-}
-
-func RunTaskByName(cfg *Config, name string, concurrency int, dryRun bool, verbose bool, vars map[string]string) error {
+func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map[string]string) error {
 	g, err := BuildGraph(cfg)
 	if err != nil {
 		return err
 	}
-	order, err := g.CollectSubgraph(name)
+
+	_, err = g.CollectSubgraph(name)
 	if err != nil {
 		return err
 	}
 
-	// Build map of in-degrees for tasks within subgraph
-	sub := map[string]bool{}
-	for _, n := range order {
-		sub[n] = true
-	}
-	indeg := map[string]int{}
-	dependents := map[string][]string{} // u -> list of tasks that depend on u
-	for u := range sub {
-		indeg[u] = 0
-	}
-	for u := range sub {
-		for _, d := range g.Deps[u] {
-			if !sub[d] {
-				continue
-			}
-			indeg[u]++
-			dependents[d] = append(dependents[d], u)
-		}
+	mergedVars := MergeVars(cfg, vars)
+
+	// Получаем волны зависимостей
+	waves, err := g.WavesFor(name)
+	if err != nil {
+		return err
 	}
 
-	// Merge vars: config vars -> env -> CLI vars
-	mergedVars := map[string]string{}
-	for k, v := range cfg.Vars {
-		mergedVars[k] = v
-	}
-	// environment variables available as env.VAR
-	envMap := map[string]string{}
-	for _, e := range os.Environ() {
-		parts := strings.SplitN(e, "=", 2)
-		if len(parts) == 2 {
-			envMap[parts[0]] = parts[1]
-		}
-	}
-	// expose env.* to templates by prefix "env."
-	// also allow direct env variable override
-	for k, v := range envMap {
-		mergedVars["env."+k] = v
-	}
-	for k, v := range vars {
-		mergedVars[k] = v
-	}
-
-	// Channel of ready tasks
-	ready := make(chan string, len(sub))
-	for u, d := range indeg {
-		if d == 0 {
-			ready <- u
-		}
-	}
-	// Worker pool
-	if concurrency <= 0 {
-		concurrency = 1
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var wg sync.WaitGroup
-	results := make(chan execResult, len(sub))
-	_ = map[string]bool{}
-	var _ sync.Mutex
-
-	// function to pick and run a task
-	runTaskFunc := func(taskName string) {
-		defer wg.Done()
-		tnode := g.Nodes[taskName]
-		if dryRun {
-			fmt.Printf("[dry-run] task %s\n", taskName)
-			results <- execResult{name: taskName, err: nil}
-			return
-		}
-		// execute task commands
+	for waveIdx, wave := range waves {
 		if verbose {
-			fmt.Printf("[start] task %s\n", taskName)
-		} else {
-			fmt.Printf("→ %s\n", taskName)
+			fmt.Printf("\n[wave %d] %v\n", waveIdx+1, wave)
 		}
-		err := executeTaskCommands(ctx, tnode, mergedVars, verbose)
-		if err != nil {
-			results <- execResult{name: taskName, err: err}
-			return
-		}
-		if verbose {
-			fmt.Printf("[done]  task %s\n", taskName)
-		}
-		results <- execResult{name: taskName, err: nil}
-	}
 
-	// worker goroutines
-	workerCtx, workerCancel := context.WithCancel(ctx)
-	defer workerCancel()
-	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-workerCtx.Done():
-					return
-				case tname, ok := <-ready:
-					if !ok {
+		var parallelBatch []*TaskNode
+		var wg sync.WaitGroup
+		errCh := make(chan error, len(wave))
+
+		runParallelBatch := func() error {
+			if len(parallelBatch) == 0 {
+				return nil
+			}
+			if verbose {
+				names := []string{}
+				for _, n := range parallelBatch {
+					names = append(names, n.Name)
+				}
+				fmt.Printf("→ running parallel group: %v\n", names)
+			}
+			for _, node := range parallelBatch {
+				wg.Add(1)
+				go func(n *TaskNode) {
+					defer wg.Done()
+					if dryRun {
+						fmt.Printf("[dry-run] task %s\n", n.Name)
 						return
 					}
-					// If this task is marked not parallel, we should run it alone
-					tnode := g.Nodes[tname]
-					if tnode.Cfg.Parallel {
-						// run in separate goroutine to allow parallelism
-						wg.Add(1)
-						go runTaskFunc(tname)
-					} else {
-						// run here (this worker) to serialize non-parallel tasks
-						if dryRun {
-							fmt.Printf("[dry-run] task %s\n", tname)
-							results <- execResult{name: tname, err: nil}
-						} else {
-							if verbose {
-								fmt.Printf("[start] task %s\n", tname)
-							} else {
-								fmt.Printf("→ %s\n", tname)
-							}
-							err := executeTaskCommands(ctx, tnode, mergedVars, verbose)
-							if err != nil {
-								results <- execResult{name: tname, err: err}
-								// cancel everything
-								workerCancel()
-								return
-							}
-							if verbose {
-								fmt.Printf("[done]  task %s\n", tname)
-							}
-							results <- execResult{name: tname, err: nil}
-						}
+					if verbose {
+						fmt.Printf("→ (par) %s\n", n.Name)
 					}
+					if err := executeTaskCommands(ctx, n, mergedVars, verbose); err != nil {
+						errCh <- fmt.Errorf("task %s failed: %w", n.Name, err)
+					}
+				}(node)
+			}
+			wg.Wait()
+			close(errCh)
+			for e := range errCh {
+				if e != nil {
+					return e
 				}
 			}
-		}()
-	}
+			parallelBatch = nil
+			return nil
+		}
 
-	// Coordinator: collect results and push new ready nodes
-	doneCount := 0
-	total := len(sub)
-	// track completed
-	completed := map[string]bool{}
-	for doneCount < total {
-		select {
-		case res := <-results:
-			if res.err != nil {
-				// cancel workers and return error
-				cancel()
-				close(ready)
-				return fmt.Errorf("task %s failed: %w", res.name, res.err)
+		for _, tname := range wave {
+			node := g.Nodes[tname]
+
+			if node.Cfg.Parallel {
+				parallelBatch = append(parallelBatch, node)
+				continue
 			}
-			// mark completed
-			completed[res.name] = true
-			doneCount++
-			// decrease indeg of dependents
-			for _, dep := range dependents[res.name] {
-				indeg[dep]--
-				if indeg[dep] == 0 {
-					// all deps done -> schedule
-					select {
-					case ready <- dep:
-					default:
-						// should not happen, but in case channel full, spawn goroutine to send
-						go func(n string) { ready <- n }(dep)
-					}
-				}
+
+			if err := runParallelBatch(); err != nil {
+				return err
 			}
-		case <-ctx.Done():
-			close(ready)
-			return errors.New("execution canceled")
+			if verbose {
+				fmt.Printf("→ (seq) %s\n", node.Name)
+			}
+			if dryRun {
+				fmt.Printf("[dry-run] task %s\n", node.Name)
+				continue
+			}
+			if err := executeTaskCommands(ctx, node, mergedVars, verbose); err != nil {
+				return fmt.Errorf("task %s failed: %w", node.Name, err)
+			}
+		}
+
+		if err := runParallelBatch(); err != nil {
+			return err
 		}
 	}
 
-	// all done
-	close(ready)
-	// tiny wait for goroutines to finish
-	// we used WaitGroup but several goroutines incremented; to simplify, sleep shortly
-	time.Sleep(50 * time.Millisecond)
+	fmt.Println("\n✅ all tasks completed successfully")
 	return nil
 }
 

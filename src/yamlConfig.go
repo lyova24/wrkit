@@ -93,6 +93,33 @@ func LoadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// MergeVars объединяет переменные из конфига, окружения и CLI
+func MergeVars(cfg *Config, cliVars map[string]string) map[string]string {
+	merged := make(map[string]string)
+
+	for k, v := range cfg.Vars {
+		merged[k] = v
+	}
+
+	envMap := map[string]string{}
+	for _, e := range os.Environ() {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+		}
+	}
+
+	for k, v := range envMap {
+		merged["env."+k] = v // добавляем с префиксом
+	}
+
+	for k, v := range cliVars {
+		merged[k] = v
+	}
+
+	return merged
+}
+
 // LoadCombinedConfig ищет локальный wrkit.yaml и глобальный ~/.wrkit.master.yaml
 // если noMaster == true, используется только локальный файл
 func LoadCombinedConfig(localPath string, noMaster bool) (*Config, error) {

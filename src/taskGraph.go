@@ -110,3 +110,49 @@ func (g *TaskGraph) CollectSubgraph(root string) ([]string, error) {
 	// order is post-order: dependencies first, root last
 	return order, nil
 }
+
+func (g *TaskGraph) WavesFor(root string) ([][]string, error) {
+	order, err := g.CollectSubgraph(root)
+	if err != nil {
+		return nil, err
+	}
+
+	indeg := map[string]int{}
+	for k := range g.Nodes {
+		indeg[k] = len(g.Deps[k])
+	}
+
+	waves := [][]string{}
+	subset := map[string]bool{}
+	for _, n := range order {
+		subset[n] = true
+	}
+
+	done := map[string]bool{}
+	for {
+		ready := []string{}
+		for n := range subset {
+			if done[n] {
+				continue
+			}
+			allDone := true
+			for _, dep := range g.Deps[n] {
+				if subset[dep] && !done[dep] {
+					allDone = false
+					break
+				}
+			}
+			if allDone {
+				ready = append(ready, n)
+			}
+		}
+		if len(ready) == 0 {
+			break
+		}
+		waves = append(waves, ready)
+		for _, r := range ready {
+			done[r] = true
+		}
+	}
+	return waves, nil
+}

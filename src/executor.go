@@ -60,6 +60,8 @@ func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map
 					}
 					if verbose {
 						fmt.Printf("→ (par) %s\n", n.Name)
+					} else {
+						fmt.Printf("→ %s\n", n.Name)
 					}
 					if err := executeTaskCommands(ctx, n, mergedVars, verbose); err != nil {
 						errCh <- fmt.Errorf("task %s failed: %w", n.Name, err)
@@ -90,6 +92,8 @@ func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map
 			}
 			if verbose {
 				fmt.Printf("→ (seq) %s\n", node.Name)
+			} else {
+				fmt.Printf("→ %s\n", node.Name)
 			}
 			if dryRun {
 				fmt.Printf("[dry-run] task %s\n", node.Name)

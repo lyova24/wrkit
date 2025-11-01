@@ -19,6 +19,8 @@ tasks:
   sleep-all:
     desc: "run all sleep tasks"
     cmds: |
+      echo sleep on the most top level for 2 seconds
+      sleep 2
       echo {{.SLEEP_ALL_SUCCESS_MSG}}
     deps:
       - sleep-for-2

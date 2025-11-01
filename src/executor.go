@@ -109,7 +109,6 @@ func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map
 		}
 	}
 
-	fmt.Println("\n✅ all tasks completed successfully")
 	return nil
 }
 

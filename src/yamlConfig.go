@@ -4,37 +4,34 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config представляет корневую структуру файла wrkit.yaml
+// Config описывает структуру wrkit.yaml
 type Config struct {
 	Vars  map[string]string      `yaml:"vars,omitempty"`
 	Tasks map[string]*TaskConfig `yaml:"tasks"`
 }
 
-// TaskConfig описывает одну задачу
+// TaskConfig — описание одной задачи
 type TaskConfig struct {
 	Desc     string            `yaml:"desc,omitempty"`
-	Cmds     StringSlice       `yaml:"cmds"` // поддерживает либо sequence, либо block scalar
+	Cmds     StringSlice       `yaml:"cmds"`
 	Deps     []string          `yaml:"deps,omitempty"`
 	Dir      string            `yaml:"dir,omitempty"`
 	Env      map[string]string `yaml:"env,omitempty"`
 	Parallel bool              `yaml:"parallel,omitempty"`
 }
 
-// StringSlice — кастомный тип для парсинга поля cmds, который принимает:
-// - YAML sequence of strings
-// - YAML multiline scalar (| или >), который будет разбит по строкам
+// StringSlice поддерживает YAML sequence или block scalar
 type StringSlice []string
 
-// UnmarshalYAML реализует кастомную десериализацию для StringSlice
 func (s *StringSlice) UnmarshalYAML(node *yaml.Node) error {
 	switch node.Kind {
 	case yaml.SequenceNode:
-		// стандартный список строк
 		var arr []string
 		if err := node.Decode(&arr); err != nil {
 			return fmt.Errorf("decode cmds sequence: %w", err)
@@ -42,12 +39,10 @@ func (s *StringSlice) UnmarshalYAML(node *yaml.Node) error {
 		*s = normalizeLines(arr)
 		return nil
 	case yaml.ScalarNode:
-		// мультистрочная строка (block scalar) или одиночная строка
 		var raw string
 		if err := node.Decode(&raw); err != nil {
 			return fmt.Errorf("decode cmds scalar: %w", err)
 		}
-		// Разбиваем по строкам, убираем пустые и тримим
 		lines := splitAndClean(raw)
 		*s = normalizeLines(lines)
 		return nil
@@ -56,13 +51,10 @@ func (s *StringSlice) UnmarshalYAML(node *yaml.Node) error {
 	}
 }
 
-// normalizeLines: убирает пустые строки и тримит, возвращает []string
 func normalizeLines(lines []string) []string {
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {
-		// убрать возможные \r (windows)
-		l = strings.ReplaceAll(l, "\r", "")
-		l = strings.TrimSpace(l)
+		l = strings.TrimSpace(strings.ReplaceAll(l, "\r", ""))
 		if l == "" {
 			continue
 		}
@@ -71,32 +63,26 @@ func normalizeLines(lines []string) []string {
 	return out
 }
 
-// splitAndClean: разбивает многострочную строку на строки
 func splitAndClean(raw string) []string {
 	if raw == "" {
 		return nil
 	}
-	// split by newline, сохранить порядок
-	parts := strings.Split(raw, "\n")
-	return parts
+	return strings.Split(raw, "\n")
 }
 
-// LoadConfig читает и парсит YAML-конфиг
+// LoadConfig читает YAML конфиг, возвращает (nil, nil) если файл отсутствует
 func LoadConfig(path string) (*Config, error) {
-	f, err := os.Open(path)
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("open config %s: %w", path, err)
-	}
-	defer f.Close()
-
-	b, err := ioutil.ReadAll(f)
-	if err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
+		if os.IsNotExist(err) {
+			return nil, nil // нет файла — не ошибка
+		}
+		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(b, &cfg); err != nil {
-		return nil, fmt.Errorf("parse yaml: %w", err)
+		return nil, fmt.Errorf("parse yaml %s: %w", path, err)
 	}
 	if cfg.Tasks == nil {
 		cfg.Tasks = map[string]*TaskConfig{}
@@ -105,4 +91,62 @@ func LoadConfig(path string) (*Config, error) {
 		cfg.Vars = map[string]string{}
 	}
 	return &cfg, nil
+}
+
+// LoadCombinedConfig ищет локальный wrkit.yaml и глобальный ~/.wrkit.master.yaml
+// если noMaster == true, используется только локальный файл
+func LoadCombinedConfig(localPath string, noMaster bool) (*Config, error) {
+	var masterCfg *Config
+	var err error
+
+	localCfg, err := LoadConfig(localPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if !noMaster {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("get home dir: %w", err)
+		}
+		masterPath := filepath.Join(homeDir, ".wrkit.master.yaml")
+
+		masterCfg, err = LoadConfig(masterPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// если нет ни одного файла — вернём пустой конфиг
+	if localCfg == nil && masterCfg == nil {
+		return &Config{Vars: map[string]string{}, Tasks: map[string]*TaskConfig{}}, nil
+	}
+	if localCfg == nil {
+		return masterCfg, nil
+	}
+	if masterCfg == nil || noMaster {
+		return localCfg, nil
+	}
+
+	// Объединяем: приоритет у локального
+	merged := &Config{
+		Vars:  map[string]string{},
+		Tasks: map[string]*TaskConfig{},
+	}
+
+	for k, v := range masterCfg.Vars {
+		merged.Vars[k] = v
+	}
+	for k, v := range localCfg.Vars {
+		merged.Vars[k] = v
+	}
+
+	for k, t := range masterCfg.Tasks {
+		merged.Tasks[k] = t
+	}
+	for k, t := range localCfg.Tasks {
+		merged.Tasks[k] = t
+	}
+
+	return merged, nil
 }

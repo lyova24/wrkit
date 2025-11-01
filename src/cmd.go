@@ -15,6 +15,7 @@ var (
 	verbose     bool
 	varsSlice   []string
 	version     = "0.1.0"
+	noMaster    bool
 )
 
 func Execute() {
@@ -29,6 +30,7 @@ func Execute() {
 	root.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "Print what would be done without executing")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 	root.PersistentFlags().StringArrayVarP(&varsSlice, "var", "V", []string{}, "Variables to pass to templates (key=value). Can be repeated.")
+	root.PersistentFlags().BoolVar(&noMaster, "no-master", false, "Ignore global ~/.wrkit.master.yaml and use only local wrkit.yaml")
 
 	root.AddCommand(cmdRun())
 	root.AddCommand(cmdList())
@@ -49,7 +51,7 @@ func cmdRun() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			taskName := args[0]
-			cfg, err := LoadConfig(cfgFile)
+			cfg, err := LoadCombinedConfig(cfgFile, noMaster)
 			if err != nil {
 				return err
 			}
@@ -65,7 +67,7 @@ func cmdList() *cobra.Command {
 		Use:   "list",
 		Short: "List tasks in the config",
 		RunE: func(c *cobra.Command, args []string) error {
-			cfg, err := LoadConfig(cfgFile)
+			cfg, err := LoadCombinedConfig(cfgFile, noMaster)
 			if err != nil {
 				return err
 			}
@@ -89,7 +91,7 @@ func cmdShow() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			name := args[0]
-			cfg, err := LoadConfig(cfgFile)
+			cfg, err := LoadCombinedConfig(cfgFile, noMaster)
 			if err != nil {
 				return err
 			}

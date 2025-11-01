@@ -22,32 +22,29 @@ func renderTemplate(tmpl string, vars map[string]string) (string, error) {
 func sampleYAML() string {
 	return `# wrkit.yaml — example for wrkit
 vars:
-  BIN: "./bin/app"
+  SLEEP_ALL_SUCCESS_MSG: "all sleep tasks executed successfully!"
 
 tasks:
-  build:
-    desc: "Собрать бинарник"
-    cmds:
-      - "go build -o {{.BIN}} ./..."
-    deps: []
-    env:
-      CGO_ENABLED: "0"
-    parallel: false
-
-  test:
-    desc: "Запустить тесты"
-    cmds:
-      - "go test ./..."
-    deps: []
+  sleep-for-2:
+    desc: "sleep for 2 seconds"
+    cmds: |
+      sleep 2
+      echo "i slept for 2 seconds!"
     parallel: true
 
-  ci:
-    desc: "CI pipeline: тесты -> сборка"
-    cmds:
-      - "echo CI finished"
+  sleep-for-3:
+    desc: "sleep for 3 seconds"
+    cmds: |
+      sleep 3
+      echo "i slept for 3 seconds!"
+    parallel: true
+
+  sleep-all:
+    desc: "run all sleep tasks"
+    cmds: |
+      echo {{.SLEEP_ALL_SUCCESS_MSG}}
     deps:
-      - test
-      - build
-    parallel: false
+      - sleep-for-2
+      - sleep-for-3
 `
 }

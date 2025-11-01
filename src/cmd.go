@@ -68,6 +68,16 @@ Behavior:
 		},
 	}
 
+	root.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if modeFlag {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		if len(args) == 0 {
+			return taskNameCompletions(toComplete)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
 	// Общие persistent-флаги (будут доступны и в режиме с подкомандами, и в обычном режиме).
 	root.PersistentFlags().StringVarP(&cfgFile, "file", "f", "wrkit.yaml", "wrkit YAML configuration file")
 	root.PersistentFlags().IntVarP(&concurrency, "concurrency", "c", 4, "Number of tasks to run concurrently")
@@ -110,6 +120,12 @@ func cmdRun() *cobra.Command {
 			varsMap := parseVars(varsSlice)
 			return RunTaskByName(cfg, taskName, concurrency, dryRun, verbose, varsMap)
 		},
+	}
+	cmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return taskNameCompletions(toComplete)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
 	}
 	return cmd
 }
@@ -216,4 +232,18 @@ func parseVars(slice []string) map[string]string {
 		}
 	}
 	return out
+}
+
+func taskNameCompletions(toComplete string) ([]string, cobra.ShellCompDirective) {
+	cfg, err := LoadCombinedConfig(cfgFile, noMaster)
+	if err != nil || cfg == nil {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	completions := []string{}
+	for name := range cfg.Tasks {
+		if strings.HasPrefix(name, toComplete) {
+			completions = append(completions, name)
+		}
+	}
+	return completions, cobra.ShellCompDirectiveNoFileComp
 }

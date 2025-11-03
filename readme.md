@@ -25,15 +25,57 @@ After this step, compiled binaries will appear in `./builds/`.
 
 ### 2. Install binary
 
-Replace `BUILD_NAME` with the name of the binary for your platform (e.g. `wrkit-linux-amd64`):
+After building with `go run . build-all`, you’ll have platform-specific binaries in `./builds/`.  
+Choose the one for your system:
+
+#### 🐧 Linux
 
 ```bash
-sudo install -m 755 ./builds/BUILD_NAME /usr/local/bin/wrkit
+sudo install -m 755 ./builds/wrkit.linux.amd64 /usr/local/bin/wrkit
+````
+
+#### 🍎 macOS
+
+For Apple Silicon (M1/M2/M3):
+
+```bash
+sudo install -m 755 ./builds/wrkit.macos.arm64 /usr/local/bin/wrkit
 ```
 
-You can now run `wrkit` from anywhere.
+For Intel-based Macs:
+
+```bash
+sudo install -m 755 ./builds/wrkit.macos.amd64 /usr/local/bin/wrkit
+```
+
+> You may need to grant permission if macOS reports that the binary is from an unidentified developer:
+>
+> ```bash
+> chmod +x /usr/local/bin/wrkit
+> xattr -d com.apple.quarantine /usr/local/bin/wrkit
+> ```
+
+#### 🪟 Windows
+
+1. Copy the binary to a directory in your PATH, for example:
+
+   ```
+   copy .\builds\wrkit.windows.amd64.exe "C:\Program Files\wrkit\wrkit.exe"
+   ```
+2. Optionally, add `C:\Program Files\wrkit` to your system PATH:
+
+    * Press `Win + R`, type `sysdm.cpl`, go to **Advanced → Environment Variables**
+    * Edit **Path**, add the directory, and confirm
+3. Now you can run:
+
+   ```powershell
+   wrkit
+   ```
 
 ---
+
+You can now run `wrkit` from anywhere on your system.
+
 
 ### 3. Enable shell autocompletion (optional)
 

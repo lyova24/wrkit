@@ -10,6 +10,7 @@ tasks:
       - build-linux-amd64
       - build-macos-amd64
       - build-macos-arm64
+      - build-windows-amd64
 
   build-linux-amd64:
     desc: "build binary for linux amd64"
@@ -34,6 +35,15 @@ tasks:
     cmds:
       - GOOS=darwin GOARCH=arm64 go build -o {{.BUILD_DIR}}/wrkit.macos.arm64
       - echo "success build for macos arm64!"
+    deps:
+      - make-builds-dir
+    parallel: true
+
+  build-windows-amd64:
+    desc: "build binary for windows amd64"
+    cmds:
+      - GOOS=windows GOARCH=amd64 go build -o {{.BUILD_DIR}}/wrkit.windows.amd64.exe
+      - echo "success build for windows amd64!"
     deps:
       - make-builds-dir
     parallel: true

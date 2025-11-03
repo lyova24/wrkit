@@ -50,7 +50,6 @@ func BuildGraph(cfg *Config) (*TaskGraph, error) {
 func checkCycles(g *TaskGraph) error {
 	// DFS coloring
 	const (
-		white = 0
 		gray  = 1
 		black = 2
 	)
@@ -92,23 +91,42 @@ func (g *TaskGraph) CollectSubgraph(root string) ([]string, error) {
 	if _, ok := g.Nodes[root]; !ok {
 		return nil, fmt.Errorf("task %q not found", root)
 	}
-	// DFS to collect
+	// order is post-order: dependencies first, root last
+	return g.dfsCollect(root), nil
+}
+
+// dfsCollect - performs a dfs to collect task dependencies in post-order
+func (g *TaskGraph) dfsCollect(root string) []string {
+	type frame struct {
+		node     string
+		expanded bool // false = first visit, true = after children
+	}
+
+	stack := []frame{{node: root}}
 	visited := map[string]bool{}
 	var order []string
-	var dfs func(string)
-	dfs = func(u string) {
-		if visited[u] {
-			return
+
+	for len(stack) > 0 {
+		top := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if visited[top.node] && !top.expanded {
+			continue
 		}
-		visited[u] = true
-		for _, d := range g.Deps[u] {
-			dfs(d)
+		if top.expanded {
+			order = append(order, top.node)
+			continue
 		}
-		order = append(order, u)
+		visited[top.node] = true
+		stack = append(stack, frame{node: top.node, expanded: true})
+		for i := len(g.Deps[top.node]) - 1; i >= 0; i-- {
+			d := g.Deps[top.node][i]
+			if !visited[d] {
+				stack = append(stack, frame{node: d})
+			}
+		}
 	}
-	dfs(root)
-	// order is post-order: dependencies first, root last
-	return order, nil
+
+	return order
 }
 
 func (g *TaskGraph) WavesFor(root string) ([][]string, error) {
@@ -122,7 +140,7 @@ func (g *TaskGraph) WavesFor(root string) ([][]string, error) {
 		indeg[k] = len(g.Deps[k])
 	}
 
-	waves := [][]string{}
+	var waves [][]string
 	subset := map[string]bool{}
 	for _, n := range order {
 		subset[n] = true
@@ -130,7 +148,7 @@ func (g *TaskGraph) WavesFor(root string) ([][]string, error) {
 
 	done := map[string]bool{}
 	for {
-		ready := []string{}
+		var ready []string
 		for n := range subset {
 			if done[n] {
 				continue

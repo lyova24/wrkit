@@ -21,7 +21,7 @@ func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map
 
 	mergedVars := MergeVars(cfg, vars)
 
-	// Получаем волны зависимостей
+	// Fetching dependency waves
 	waves, err := g.WavesFor(name)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map
 				return nil
 			}
 			if verbose {
-				names := []string{}
+				var names []string
 				for _, n := range parallelBatch {
 					names = append(names, n.Name)
 				}
@@ -79,8 +79,8 @@ func RunTaskByName(cfg *Config, name string, dryRun bool, verbose bool, vars map
 			return nil
 		}
 
-		for _, tname := range wave {
-			node := g.Nodes[tname]
+		for _, taskName := range wave {
+			node := g.Nodes[taskName]
 
 			if node.Cfg.Parallel {
 				parallelBatch = append(parallelBatch, node)

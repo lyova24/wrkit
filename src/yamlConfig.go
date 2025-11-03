@@ -26,7 +26,7 @@ type TaskConfig struct {
 	Parallel bool              `yaml:"parallel,omitempty"`
 }
 
-// StringSlice поддерживает YAML sequence или block scalar
+// StringSlice supports YAML sequence or block scalar
 type StringSlice []string
 
 func (s *StringSlice) UnmarshalYAML(node *yaml.Node) error {
@@ -70,12 +70,12 @@ func splitAndClean(raw string) []string {
 	return strings.Split(raw, "\n")
 }
 
-// LoadConfig читает YAML конфиг, возвращает (nil, nil) если файл отсутствует
+// LoadConfig reads YAML config, returns (nil, nil) if file does not exists
 func LoadConfig(path string) (*Config, error) {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // нет файла — не ошибка
+			return nil, nil // no file — not error
 		}
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
@@ -93,7 +93,7 @@ func LoadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// MergeVars объединяет переменные из конфига, окружения и CLI
+// MergeVars merging variables from config, environment and CLI
 func MergeVars(cfg *Config, cliVars map[string]string) map[string]string {
 	merged := make(map[string]string)
 
@@ -110,7 +110,7 @@ func MergeVars(cfg *Config, cliVars map[string]string) map[string]string {
 	}
 
 	for k, v := range envMap {
-		merged["env."+k] = v // добавляем с префиксом
+		merged["env."+k] = v // adding with prefix
 	}
 
 	for k, v := range cliVars {
@@ -120,8 +120,8 @@ func MergeVars(cfg *Config, cliVars map[string]string) map[string]string {
 	return merged
 }
 
-// LoadCombinedConfig ищет локальный wrkit.yaml и глобальный ~/.wrkit.master.yaml
-// если noMaster == true, используется только локальный файл
+// LoadCombinedConfig searches for local wrkit.yaml and global ~/.wrkit.master.yaml
+// if noMaster == true, using only local file
 func LoadCombinedConfig(localPath string, noMaster bool) (*Config, error) {
 	var masterCfg *Config
 	var err error
@@ -144,7 +144,7 @@ func LoadCombinedConfig(localPath string, noMaster bool) (*Config, error) {
 		}
 	}
 
-	// если нет ни одного файла — вернём пустой конфиг
+	// if no any file — returning empty config
 	if localCfg == nil && masterCfg == nil {
 		return &Config{Vars: map[string]string{}, Tasks: map[string]*TaskConfig{}}, nil
 	}
@@ -155,7 +155,7 @@ func LoadCombinedConfig(localPath string, noMaster bool) (*Config, error) {
 		return localCfg, nil
 	}
 
-	// Объединяем: приоритет у локального
+	// Merging: local one is prioritized
 	merged := &Config{
 		Vars:  map[string]string{},
 		Tasks: map[string]*TaskConfig{},

@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	src.Execute()
+	src.Entrypoint()
 }

@@ -14,7 +14,7 @@
 Make sure you have [Go](https://go.dev/dl/) installed (Go 1.20+ recommended).
 
 ```bash
-git clone https://github.com/yourname/wrkit.git
+git clone https://github.com/lyova24/wrkit.git
 cd wrkit
 go mod tidy && go run . build-all
 ```

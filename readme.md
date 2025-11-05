@@ -17,7 +17,7 @@ Make sure you have [Go](https://go.dev/dl/) installed (Go 1.20+ recommended).
 git clone https://github.com/yourname/wrkit.git
 cd wrkit
 go mod tidy && go run . build-all
-````
+```
 
 After this step, compiled binaries will appear in `./builds/`.
 
@@ -32,7 +32,7 @@ Choose the one for your system:
 
 ```bash
 sudo install -m 755 ./builds/wrkit.linux.amd64 /usr/local/bin/wrkit
-````
+```
 
 #### 🍎 macOS
 
@@ -187,6 +187,73 @@ tasks:
 
 ---
 
+### Post-tasks (hooks after main task)
+
+You can specify tasks to run automatically after the main task using the `post:` section.  
+Each post-task can have a `when` condition to control when it runs:
+
+- `success` (default): runs only if the main task succeeded
+- `fail`: runs only if the main task failed
+- `always`: runs regardless of the main task result
+
+Example:
+
+```yaml
+tasks:
+  build:
+    desc: Build the project
+    cmds:
+      - make build
+    post:
+      - name: notify
+        when: success
+      - name: cleanup
+        when: always
+
+  notify:
+    desc: Notify on build success
+    cmds:
+      - echo "Build succeeded!"
+
+  cleanup:
+    desc: Cleanup after build
+    cmds:
+      - rm -rf tmp/
+```
+
+**How it works:**
+- After `build` finishes, `notify` will run only if `build` was successful.
+- `cleanup` will always run after `build`, regardless of success or failure.
+
+---
+
+### Log output and task types
+
+During execution, wrkit prints logs with explicit task type labels:
+
+- `[deps-task]` — dependency task (runs before the main task)
+- `[main-task]` — the main task you invoked
+- `[post-task:success]`, `[post-task:fail]`, `[post-task:always]` — post-tasks, with their trigger condition
+
+Example log fragment:
+
+```
+→ [deps-task] sleep-for-2
+→ [deps-task] sleep-for-3
+→ [main-task] sleep-all
+→ [post-task:success] notify
+→ [post-task:always] cleanup
+```
+
+In verbose mode, command lines are also labeled:
+
+```
+[cmd][main-task] echo sleeping for 2 seconds at top level
+[cmd][post-task:always] rm -rf tmp/
+```
+
+---
+
 ## 🔍 CLI Reference
 
 ```bash
@@ -259,11 +326,15 @@ tasks:
       ssh {{.MYVM_USER}}@{{.MYVM_ADDRESS}}
     deps:
       - my-outline
-````
+    post:
+      - name: my-outline-off
+        when: always
+```
 
 #### What the configuration does
 
 * **`my-outline`** — launches the Outline client in a detached `screen` session to establish a secure VPN/proxy connection using the provided `MY_OUTLINE_LINK`.
-* **`my-outline-off`** — stops the running Outline client by terminating the corresponding `screen` session.
-* **`ssh-myvm`** — connects to the remote VM over SSH using `MYVM_USER` and `MYVM_ADDRESS`.
-  Before execution, this task automatically runs `my-outline` to ensure the SSH connection goes through the secure channel.
+* **`my-outline-off`** — stops the running Outline client by terminating the corresponding `screen` session.  
+  This task is set as a post-task with `when: always`, so it will always run after `ssh-myvm` finishes (regardless of success or failure).
+* **`ssh-myvm`** — connects to the remote VM over SSH using `MYVM_USER` and `MYVM_ADDRESS`.  
+  Before execution, this task automatically runs `my-outline` to ensure the SSH connection goes through the secure channel, and after execution, always runs `my-outline-off` to clean up the connection.

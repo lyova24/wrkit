@@ -235,6 +235,7 @@ func executeTaskCommands(ctx context.Context, node *TaskNode, vars map[string]st
 		cmd.Env = env
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
 
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("command %q failed: %w", cmdStr, err)

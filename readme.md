@@ -234,3 +234,36 @@ Flags:
 
 ---
 
+## 📘 Examples
+### Connecting to a Remote VM via Outline
+
+This example demonstrates how to use wrkit in one of the real-world scenarios — connecting to a remote virtual machine through a secure Outline proxy.
+
+```yaml
+vars:
+  MYVM_USER: some-insane-user
+  MYVM_ADDRESS: some-insane-address
+  MY_OUTLINE_LINK: ss://key@domain:port/
+
+tasks:
+  my-outline:
+    cmds: |
+      screen -dmS outline sudo ./outline/outline-cli -transport {{.MY_OUTLINE_LINK}}
+
+  my-outline-off:
+    cmds: |
+      screen -S outline -X quit
+
+  ssh-myvm:
+    cmds: |
+      ssh {{.MYVM_USER}}@{{.MYVM_ADDRESS}}
+    deps:
+      - my-outline
+````
+
+#### What the configuration does
+
+* **`my-outline`** — launches the Outline client in a detached `screen` session to establish a secure VPN/proxy connection using the provided `MY_OUTLINE_LINK`.
+* **`my-outline-off`** — stops the running Outline client by terminating the corresponding `screen` session.
+* **`ssh-myvm`** — connects to the remote VM over SSH using `MYVM_USER` and `MYVM_ADDRESS`.
+  Before execution, this task automatically runs `my-outline` to ensure the SSH connection goes through the secure channel.

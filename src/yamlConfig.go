@@ -16,6 +16,12 @@ type Config struct {
 	Tasks map[string]*TaskConfig `yaml:"tasks"`
 }
 
+// PostTaskConfig — описание post-task'а
+type PostTaskConfig struct {
+	Name string `yaml:"name"`
+	When string `yaml:"when,omitempty"` // always, success, fails
+}
+
 // TaskConfig — описание одной задачи
 type TaskConfig struct {
 	Desc     string            `yaml:"desc,omitempty"`
@@ -24,6 +30,7 @@ type TaskConfig struct {
 	Dir      string            `yaml:"dir,omitempty"`
 	Env      map[string]string `yaml:"env,omitempty"`
 	Parallel bool              `yaml:"parallel,omitempty"`
+	Post     []PostTaskConfig  `yaml:"post,omitempty"` // Новое поле
 }
 
 // StringSlice supports YAML sequence or block scalar
